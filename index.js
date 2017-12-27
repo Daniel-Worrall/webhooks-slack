@@ -5,7 +5,7 @@ const morgan = require('morgan');
 const multer = require('multer');
 const Redis = require('ioredis');
 const sha1 = require('sha1');
-const Slack = require('slack-node');
+const Nekocurl = require('nekocurl');
 const upload = multer({ storage: multer.memoryStorage() });
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60; // in seconds
@@ -13,15 +13,10 @@ const SEVEN_DAYS = 7 * 24 * 60 * 60; // in seconds
 //
 // setup
 
-const channel = process.env.SLACK_CHANNEL;
 const appURL = process.env.APP_URL;
 const redis = new Redis(process.env.REDIS_URL);
 
-//
-// slack
-
-const slack = new Slack();
-slack.setWebhook(process.env.SLACK_URL);
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
 
 //
 // express
@@ -78,7 +73,7 @@ app.post('/', upload.single('thumb'), async(req, res, next) => {
     } else if (payload.rating > 0) {
       action = 'rated ';
       for (var i = 0; i < payload.rating / 2; i++) {
-        action += ':star:';
+        action += '⭐';
       }
     } else {
       action = 'unrated';
@@ -177,11 +172,10 @@ function notifySlack(imageUrl, payload, location, action) {
     const state = location.country_code === 'US' ? location.region_name : location.country_name;
     locationText = `near ${location.city}, ${state}`;
   }
-
-  slack.webhook({
-    channel,
+  
+  const props = {
     username: 'Plex',
-    icon_emoji: ':plex:',
+    icon_emoji: 'plex',
     attachments: [{
       fallback: 'Required plain-text summary of the attachment.',
       color: '#a67a2d',
@@ -191,5 +185,7 @@ function notifySlack(imageUrl, payload, location, action) {
       footer: `${action} by ${payload.Account.title} on ${payload.Player.title} from ${payload.Server.title} ${locationText}`,
       footer_icon: payload.Account.thumb
     }]
-  }, () => {});
+};
+  const request = new Nekocurl(WEBHOOK_URL+'/slack', { method: 'POST', data: JSON.stringify(props), json: true });
+  request.send().catch(console.error);
 }
